@@ -15,9 +15,6 @@ def EPflux(dataset, divergence = True, QG = False):
 
     QG: 'bool'
         Use QG version equation for calculation if True, not if False
-
-    rho_fix: 'bool'
-        If True, the function will use rho(density) as one of the scaling factor for the Flux vector.
     
     Returns
     -------
@@ -40,7 +37,7 @@ def EPflux(dataset, divergence = True, QG = False):
                 dataset=dataset.rename({i: "thta"})
         else: 
             continue
-        
+
     if thta == False:
         dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
 
