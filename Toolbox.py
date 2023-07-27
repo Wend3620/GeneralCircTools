@@ -19,7 +19,7 @@ def EPflux(dataset, divergence = True, QG = False):
     Returns
     -------
     'xarray.Dataset'
-        A dataset contains calculated data. 
+        A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time). 
     '''
     thta = False
     for i in list(dataset.coords):
@@ -93,12 +93,12 @@ def EPflux(dataset, divergence = True, QG = False):
         dFy.name = 'dFy'
         dFz.name = 'dFz'
          
-        return xr.merge([Fy, Fz, dFz, dFy]).mean(['time', 'lon'])
+        return xr.merge([Fy, Fz, dFz, dFy]).mean(['lon'])
     else:
-        return xr.merge([Fy, Fz]).mean(['time', 'lon'])
+        return xr.merge([Fy, Fz]).mean(['lon'])
     
 
-def EPflux_np(dataset, QG = False):
+def EPflux_np(dataset, divergence = True, QG = False):
 
     r'''
     Parameters
@@ -106,6 +106,8 @@ def EPflux_np(dataset, QG = False):
     dataset: 'xarray.Dataset' 
         The dataset for EP flux calculation.
         The dataset should contain following parameters: u(zonal wind), v(meridional wind), t(temperature).
+    divergence: 'bool'
+        Whether to calculate EP flux divergence or not. Default is True
 
     QG: 'bool'
         Use QG version equation for calculation if True, not if False
@@ -113,8 +115,27 @@ def EPflux_np(dataset, QG = False):
     Returns
     -------
     'xarray.Dataset'
-        A dataset contains calculated data. 
+        A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
     '''
+    thta = False
+    for i in list(dataset.coords):
+        if i.lower() in 'latitudesxzonal' and i!='lat':
+            dataset=dataset.rename({i: "lat"})
+        elif i.lower() in 'longitudesymeridional' and i != 'lon':
+            dataset=dataset.rename({i: "lon"})
+        elif i.lower() in 'pressureisobaricinhpa' and  i != 'pressure':
+            dataset=dataset.rename({i: "pressure"})
+        elif i.lower() in 'temperature' and i != 't':
+            dataset=dataset.rename({i: "t"})
+        elif i.lower() in ['potential temperature', 'theta', 'thta']:
+            thta = True
+            if i != 'thta':
+                dataset=dataset.rename({i: "thta"})
+        else: 
+            continue
+
+    if thta == False:
+        dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
 
     #Constants
     T0= dataset.t.sel(pressure = 1000)#K
@@ -146,7 +167,7 @@ def EPflux_np(dataset, QG = False):
 
     dz = (dp*R0*dataset.t/g/dataset.pressure/100)*units('1/Pa')
     dthta = np.gradient(ds_bar.thta, axis=1, edge_order=2)
-    #print(dthta.shape)
+    print(dthta.shape)
 
     dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
                         coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
@@ -155,7 +176,7 @@ def EPflux_np(dataset, QG = False):
     dthtadp = dthta/dp * units('kelvin')
     dphi = np.gradient(dataset.lat, edge_order=2)
 
-    #print(dphi.shape)
+    print(dphi.shape)
     dphi = dphi*np.pi/-180
     dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
     #Putting everything together...
@@ -171,17 +192,11 @@ def EPflux_np(dataset, QG = False):
         fy = -1*up_vp
 
     Fy = rho*a*cphi*fy
-    dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
-    #print(dfy.shape)
-    dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
-                        coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
-    dfy = dfy/dphi*cphi - 2*sphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
-    dFy = dfy/rho/a/cphi*units('kg/m^3')
-    dFy = 86400*dFy*units('m^2/s/day')
+    
 
     if QG != True:
         du = np.gradient(ds_bar.u, axis = 2, edge_order = 2)
-        #print(du.shape)
+        print(du.shape)
         du = xr.DataArray(du*-1, dims = ['time', 'pressure', 'lat'], 
                         coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
         subf = ((du.mean('time')*cphi/dphi*units('m/s')-ds_bar.u*sphi)/a/cphi) #Fp term2
@@ -193,14 +208,33 @@ def EPflux_np(dataset, QG = False):
 
     fz = fp/dp*dz*-1
     Fz = rho*a*cphi*fz
-    dfz = np.gradient((fz * rho).mean('lon'), axis = 1, edge_order=2)
-    #print(dfz.shape)
-    dfz = xr.DataArray(dfz, dims = ['time', 'pressure','lat'], 
-                    coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
-    dFz = dfz/rho/dz*units('kg/m^3')
-    dFz = 86400*dFz*units('m^2/s/day') #* units('joule/kg*s/day')
 
     Fy = Fy.mean('lon')
-    Fz = Fz.mean(['lon'])*units('kg*m^2/s^2/joule/pascal')
+    Fz = Fz.mean(['lon'])
 
-    return  xr.merge([Fy, Fz, dFy, dFz])
+    Fy.name = 'Fy'
+    Fz.name = 'Fz'
+    
+    if divergence == True:
+        dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
+        print(dfy.shape)
+        dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
+                            coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
+        dfy = dfy/dphi*cphi - 2*sphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
+        dFy = dfy/rho/a/cphi*units('kg/m^3')
+        dFy = 86400*dFy.mean('lon')*units('m^2/s/day')
+
+        dfz = np.gradient((fz * rho).mean('lon'), axis = 1, edge_order=2)
+        print(dfz.shape)
+        dfz = xr.DataArray(dfz, dims = ['time', 'pressure','lat'], 
+                        coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
+        dFz = dfz/rho/dz*units('kg/m^3')
+        dFz = 86400*dFz.mean('lon')*units('m^2/s/day') #* units('joule/kg*s/day')
+
+        
+        dFy.name = 'dFy'
+        dFz.name = 'dFz'
+
+        return xr.merge([Fy, Fz, dFy, dFz])
+    else: 
+        return xr.merge([Fy, Fz])
