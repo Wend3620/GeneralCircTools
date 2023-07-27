@@ -92,9 +92,10 @@ def EPflux(dataset, divergence = True, QG = False):
 
         dFy.name = 'dFy'
         dFz.name = 'dFz'
-         
+        print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz, dFz, dFy]).mean(['lon'])
     else:
+        print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz]).mean(['lon'])
     
 
@@ -162,21 +163,17 @@ def EPflux_np(dataset, divergence = True, QG = False):
     thtap_vp = thta_v - ds_bar.thta*ds_bar.v
     #Derivatives
     dp = np.gradient(ds_bar.pressure, edge_order=2)
-    #print(dp.shape)
     dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
 
     dz = (dp*R0*dataset.t/g/dataset.pressure/100)*units('1/Pa')
     dthta = np.gradient(ds_bar.thta, axis=1, edge_order=2)
-    print(dthta.shape)
 
     dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
                         coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
 
-    #dthtadz = dthta/dz.mean('lon')*units('joule*s^2*kelvin/kg/m^2')
     dthtadp = dthta/dp * units('kelvin')
     dphi = np.gradient(dataset.lat, edge_order=2)
 
-    print(dphi.shape)
     dphi = dphi*np.pi/-180
     dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
     #Putting everything together...
@@ -196,7 +193,6 @@ def EPflux_np(dataset, divergence = True, QG = False):
 
     if QG != True:
         du = np.gradient(ds_bar.u, axis = 2, edge_order = 2)
-        print(du.shape)
         du = xr.DataArray(du*-1, dims = ['time', 'pressure', 'lat'], 
                         coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
         subf = ((du.mean('time')*cphi/dphi*units('m/s')-ds_bar.u*sphi)/a/cphi) #Fp term2
@@ -217,7 +213,6 @@ def EPflux_np(dataset, divergence = True, QG = False):
     
     if divergence == True:
         dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
-        print(dfy.shape)
         dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
                             coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
         dfy = dfy/dphi*cphi - 2*sphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
@@ -225,7 +220,6 @@ def EPflux_np(dataset, divergence = True, QG = False):
         dFy = 86400*dFy.mean('lon')*units('m^2/s/day')
 
         dfz = np.gradient((fz * rho).mean('lon'), axis = 1, edge_order=2)
-        print(dfz.shape)
         dfz = xr.DataArray(dfz, dims = ['time', 'pressure','lat'], 
                         coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
         dFz = dfz/rho/dz*units('kg/m^3')
@@ -234,7 +228,8 @@ def EPflux_np(dataset, divergence = True, QG = False):
         
         dFy.name = 'dFy'
         dFz.name = 'dFz'
-
+        print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz, dFy, dFz])
     else: 
+        print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
