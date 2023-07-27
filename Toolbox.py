@@ -93,6 +93,114 @@ def EPflux(dataset, divergence = True, QG = False):
         dFy.name = 'dFy'
         dFz.name = 'dFz'
          
-        return xr.merge([Fy, Fz, dFz, dFy])
+        return xr.merge([Fy, Fz, dFz, dFy]).mean(['time', 'lon'])
     else:
-        return xr.merge([Fy, Fz])
+        return xr.merge([Fy, Fz]).mean(['time', 'lon'])
+    
+
+def EPflux_np(dataset, QG = False):
+
+    r'''
+    Parameters
+    ----------
+    dataset: 'xarray.Dataset' 
+        The dataset for EP flux calculation.
+        The dataset should contain following parameters: u(zonal wind), v(meridional wind), t(temperature).
+
+    QG: 'bool'
+        Use QG version equation for calculation if True, not if False
+    
+    Returns
+    -------
+    'xarray.Dataset'
+        A dataset contains calculated data. 
+    '''
+
+    #Constants
+    T0= dataset.t.sel(pressure = 1000)#K
+    R0 = 287 * units('m^2/s^2/kelvin') #J/kg/K
+    P0= 101300 *units('Pa')#hPa
+    a = 6378000 * units.meter #m radius of the earth
+    rho0 = P0/T0/R0 #kg/m3
+    g = 9.81 * units('m/s^2')
+    omega = 2*np.pi/(24*3600)
+    f = 2*omega*np.sin(dataset.lat/180*np.pi) * units("s^-1")
+    cphi = np.cos(dataset.lat*np.pi/180)
+    sphi = np.sin(dataset.lat*np.pi/180)
+    rho = rho0*(dataset.pressure*100*units.Pa)/P0
+    rho.attrs["long_name"] = "density"
+    rho.attrs["units"] = "kg/m3"
+    rho.attrs["standard_name"] = "air_density"
+    rho = rho*units("kg/Pa/s^2/m")
+    #Zonal mean
+    ds_bar = dataset.mean('lon')
+    #Eddies
+    u_v = (dataset.u*dataset.v).mean('lon')
+    up_vp = u_v - ds_bar.u*ds_bar.v
+    thta_v = (dataset.thta*dataset.v).mean('lon')
+    thtap_vp = thta_v - ds_bar.thta*ds_bar.v
+    #Derivatives
+    dp = np.gradient(ds_bar.pressure, edge_order=2)
+    #print(dp.shape)
+    dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
+
+    dz = (dp*R0*dataset.t/g/dataset.pressure/100)*units('1/Pa')
+    dthta = np.gradient(ds_bar.thta, axis=1, edge_order=2)
+    #print(dthta.shape)
+
+    dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
+                        coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
+
+    #dthtadz = dthta/dz.mean('lon')*units('joule*s^2*kelvin/kg/m^2')
+    dthtadp = dthta/dp * units('kelvin')
+    dphi = np.gradient(dataset.lat, edge_order=2)
+
+    #print(dphi.shape)
+    dphi = dphi*np.pi/-180
+    dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
+    #Putting everything together...
+    if QG != True:
+        dudp = np.gradient(dataset.u, axis = 1, edge_order=2)
+        #print(dudp.shape)
+        dudp = xr.DataArray(dudp*-1, dims = ['time', 'pressure','lat', 'lon'],
+                            coords=dict(pressure = dataset.pressure, lat= dataset.lat, time = dataset.time))*units('m/s')
+        dudp = (dudp/dp).mean('lon')
+        Ep1ag = dudp*thtap_vp/dthtadp
+        fy = -1*up_vp + Ep1ag
+    else:
+        fy = -1*up_vp
+
+    Fy = rho*a*cphi*fy
+    dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
+    #print(dfy.shape)
+    dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
+                        coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
+    dfy = dfy/dphi*cphi - 2*sphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
+    dFy = dfy/rho/a/cphi*units('kg/m^3')
+    dFy = 86400*dFy*units('m^2/s/day')
+
+    if QG != True:
+        du = np.gradient(ds_bar.u, axis = 2, edge_order = 2)
+        #print(du.shape)
+        du = xr.DataArray(du*-1, dims = ['time', 'pressure', 'lat'], 
+                        coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
+        subf = ((du.mean('time')*cphi/dphi*units('m/s')-ds_bar.u*sphi)/a/cphi) #Fp term2
+        up_wp = ((dataset.u - ds_bar.u)*(dataset.w-ds_bar.w)).mean('lon')
+        Ep2ag = -1*subf*thtap_vp/dthtadp-up_wp
+        fp = thtap_vp/dthtadp*f + Ep2ag
+    else:
+        fp = thtap_vp/dthtadp*f
+
+    fz = fp/dp*dz*-1
+    Fz = rho*a*cphi*fz
+    dfz = np.gradient((fz * rho).mean('lon'), axis = 1, edge_order=2)
+    #print(dfz.shape)
+    dfz = xr.DataArray(dfz, dims = ['time', 'pressure','lat'], 
+                    coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
+    dFz = dfz/rho/dz*units('kg/m^3')
+    dFz = 86400*dFz*units('m^2/s/day') #* units('joule/kg*s/day')
+
+    Fy = Fy.mean('lon')
+    Fz = Fz.mean(['lon'])*units('kg*m^2/s^2/joule/pascal')
+
+    return  xr.merge([Fy, Fz, dFy, dFz])
