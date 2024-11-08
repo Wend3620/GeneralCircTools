@@ -233,3 +233,35 @@ def EPflux_np(dataset, divergence = True, QG = False):
     else: 
         print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
+    
+def eof(data, normalize=True):
+    '''
+    Function for performing EOF analysis
+    Parameters: 
+    data: array-like
+        Your input data
+    normalize: Boolean
+        True if input data is expected to be normalized before the analysis.
+    Returns:
+    pc: array-like
+        Resulted principal components
+    angles: array-like
+        Phase angle calculated by arctan(pc2/pc1) (Second component/First component)
+    '''
+    if normalize==True:
+        raw_data = data #.sel(isobaricInhPa=50)
+        X_mean = raw_data.mean()
+        X_std = raw_data.std()
+        data = (raw_data - X_mean) / X_std
+    ucov = np.cov(data.T)
+    eval, evec = np.linalg.eig(ucov)
+    idxes = np.argsort(eval)[::-1]
+    eval = eval[idxes]
+    evec = evec[:, idxes]
+
+    pc = np.dot(data, evec) #Principal component
+    
+    thta = np.arctan2(pc[:, 1], pc[:, 0])
+    vals = np.degrees(thta)
+    angles = np.array([float(i) if i>0 else float(i)+360 for i in vals])
+    return pc, angles
