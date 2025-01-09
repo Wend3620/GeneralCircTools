@@ -3,8 +3,15 @@ import metpy.calc as mpcalc
 from metpy.units import units
 
 def EPflux(dataset, divergence = True, QG = False):
-
+    
     r'''
+    (Using Xarray derivatives)
+    Function used for calculating Eliassen Palm flux (EP flux) vectors.
+    
+    Variable required: Zonal wind(u), Meridional wind(v), Temperature(t).
+    
+    Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    
     Parameters
     ----------
     dataset: 'xarray.Dataset' 
@@ -22,24 +29,48 @@ def EPflux(dataset, divergence = True, QG = False):
         A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time). 
     '''
     thta = False
+    dim_ready = 0
     for i in list(dataset.coords):
-        if i.lower() in 'latitudesxzonal' and i!='lat':
-            dataset=dataset.rename({i: "lat"})
-        elif i.lower() in 'longitudesymeridional' and i != 'lon':
-            dataset=dataset.rename({i: "lon"})
-        elif i.lower() in 'pressureisobaricinhpa' and  i != 'pressure':
-            dataset=dataset.rename({i: "pressure"})
-        elif i.lower() in 'temperature' and i != 't':
-            dataset=dataset.rename({i: "t"})
-        elif i.lower() in ['potential temperature', 'theta', 'thta']:
+        test_string = i.lower().replace('_', '').replace(' ', '')
+        if test_string in 'latitudesxzonal': 
+            dim_ready+=1
+            if i!='lat':
+                dataset=dataset.rename({i: "lat"})
+        elif test_string in 'longitudesymeridional':
+            dim_ready+=1
+            if i != 'lon':
+                dataset=dataset.rename({i: "lon"})
+        elif test_string in 'pressureisobaricinhpa': 
+            dim_ready+=1
+            if i != 'pressure':
+                dataset=dataset.rename({i: "pressure"})
+        elif test_string in 'uwindzonalwind':
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "u"})
+        elif test_string in 'vwindmeridionalwind' :
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "v"})
+       
+        elif test_string in 'potentialtemperaturethetathta':
+            dim_ready+=1
             thta = True
-            if i != 'thta':
+            if test_string in 'temperature' :
+                thta = False 
+                if i != 't':
+                    dataset=dataset.rename({i: "t"})    
+            elif i != 'thta':
                 dataset=dataset.rename({i: "thta"})
+            
         else: 
             continue
 
     if thta == False:
         dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
+
+    if dim_ready != 6:
+        raise KeyError("You are missing one of the dimensions required for the calculation")
 
     T0= dataset.t.sel(pressure = 1000)#K
     R0 = 287 * units('J/kg/kelvin') #J/kg/K
@@ -102,14 +133,19 @@ def EPflux(dataset, divergence = True, QG = False):
 def EPflux_np(dataset, divergence = True, QG = False):
 
     r'''
+    (Using numpy to calculate derivatives)
+    Function used for calculating Eliassen Palm flux (EP flux) vectors.
+    
+    Variable required: Zonal wind(u), Meridional wind(v), Temperature(t), Vertical wind(w)(Ignored if you want QG results only(QG==True)).
+    
+    Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    
     Parameters
     ----------
     dataset: 'xarray.Dataset' 
         The dataset for EP flux calculation.
-        The dataset should contain following parameters: u(zonal wind), v(meridional wind), t(temperature).
     divergence: 'bool'
         Whether to calculate EP flux divergence or not. Default is True
-
     QG: 'bool'
         Use QG version equation for calculation if True, not if False
     
@@ -119,25 +155,53 @@ def EPflux_np(dataset, divergence = True, QG = False):
         A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
     '''
     thta = False
+    dim_ready = 0
     for i in list(dataset.coords):
-        if i.lower() in 'latitudesxzonal' and i!='lat':
-            dataset=dataset.rename({i: "lat"})
-        elif i.lower() in 'longitudesymeridional' and i != 'lon':
-            dataset=dataset.rename({i: "lon"})
-        elif i.lower() in 'pressureisobaricinhpa' and  i != 'pressure':
-            dataset=dataset.rename({i: "pressure"})
-        elif i.lower() in 'temperature' and i != 't':
-            dataset=dataset.rename({i: "t"})
-        elif i.lower() in ['potential temperature', 'theta', 'thta']:
+        test_string = i.lower().replace('_', '').replace(' ', '')
+        if test_string in 'latitudesxzonal': 
+            dim_ready+=1
+            if i!='lat':
+                dataset=dataset.rename({i: "lat"})
+        elif test_string in 'longitudesymeridional':
+            dim_ready+=1
+            if i != 'lon':
+                dataset=dataset.rename({i: "lon"})
+        elif test_string in 'pressureisobaricinhpa': 
+            dim_ready+=1
+            if i != 'pressure':
+                dataset=dataset.rename({i: "pressure"})
+        elif test_string in 'uwindzonalwind':
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "u"})
+        elif test_string in 'vwindmeridionalwind' :
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "v"})
+        elif test_string in 'potentialtemperaturethetathta':
+            dim_ready+=1
             thta = True
-            if i != 'thta':
+            if test_string in 'temperature' :
+                thta = False 
+                if i != 't':
+                    dataset=dataset.rename({i: "t"})    
+            elif i != 'thta':
                 dataset=dataset.rename({i: "thta"})
+        elif test_string in 'wwindverticalwind' and QG == True:
+            dim_ready+=1
+            if i != 'w':
+                dataset=dataset.rename({i: "w"})
         else: 
             continue
 
     if thta == False:
         dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
-
+        
+    if QG == True and dim_ready != 7 :
+            raise KeyError("You are missing one of the dimensions required for the calculation")
+    elif QG == False and dim_ready != 6 :
+            raise KeyError("You are missing one of the dimensions required for the calculation")
+        
     #Constants
     T0= dataset.t.sel(pressure = 1000)#K
     R0 = 287 * units('m^2/s^2/kelvin') #J/kg/K
@@ -234,7 +298,114 @@ def EPflux_np(dataset, divergence = True, QG = False):
         print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
     
-def eof(data, normalize=True):
+def TEM(dataset, pressure_level = False):
+    r'''
+    (Using numpy to calculate derivatives)
+    Function used for calculating Transformed Eulerian Means(TEM) Circulation vectors.
+    
+    Variable required: Meridional wind(v), Vertical wind(w), Temperature(t) .
+    
+    Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    
+    Parameters
+    ----------
+    dataset: 'xarray.Dataset' 
+        The dataset for EP flux calculation.
+    pressure_level: 'bool'
+        Whether to have your vertical component results with unit m/s or Pa/s. Default is False (m/s)
+    
+    Returns
+    -------
+    'xarray.Dataset'
+        A dataset contains calculated data (v_star, w_star) in 3 dimensions (Latitude, Pressure, Time).
+    '''
+    thta = False
+    dim_ready = 0
+    for i in list(dataset.coords):
+        test_string = i.lower().replace('_', '').replace(' ', '')
+        if test_string in 'latitudesxzonal': 
+            dim_ready+=1
+            if i!='lat':
+                dataset=dataset.rename({i: "lat"})
+        elif test_string in 'longitudesymeridional':
+            dim_ready+=1
+            if i != 'lon':
+                dataset=dataset.rename({i: "lon"})
+        elif test_string in 'pressureisobaricinhpa': 
+            dim_ready+=1
+            if i != 'pressure':
+                dataset=dataset.rename({i: "pressure"})
+        elif test_string in 'uwindzonalwind':
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "u"})
+        elif test_string in 'vwindmeridionalwind' :
+            dim_ready+=1
+            if i != 'v':
+                dataset=dataset.rename({i: "v"})
+       
+        elif test_string in 'potentialtemperaturethetathta':
+            dim_ready+=1
+            thta = True
+            if test_string in 'temperature' :
+                thta = False 
+                if i != 't':
+                    dataset=dataset.rename({i: "t"})    
+            elif i != 'thta':
+                dataset=dataset.rename({i: "thta"})
+            
+        else: 
+            continue
+
+    if thta == False:
+        dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
+
+    if dim_ready != 6:
+        raise KeyError("You are missing one of the dimensions required for the calculation")
+    
+    #Calculation for mean values
+    ds_bar = dataset.mean('lon')
+    
+    a = 6378000 * units.meter #m radius of the earth
+    cphi = np.cos(dataset.lat*np.pi/180)
+    H = 7000*units('m')
+
+    #Eddies
+    thta_v = (dataset.thta*dataset.v).mean('lon')
+    thtap_vp = thta_v - ds_bar.thta*ds_bar.v
+    #Derivatives
+    dp = np.gradient(ds_bar.pressure, edge_order=2)
+    dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
+
+    dthta = np.gradient(ds_bar.thta, axis=1, edge_order=2)
+
+    dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
+                        coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
+    
+    dthtadp = dthta/dp * units('kelvin')
+    dphi = np.gradient(dataset.lat, edge_order=2)
+    dphi = dphi*np.pi/-180
+    dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
+
+    #Vertical component
+    w_upper = np.gradient(thtap_vp/dthtadp*cphi, axis= 2, edge_order=2)*np.pi/-180
+    w_upper= xr.DataArray(w_upper, dims = ['time', 'pressure', 'lat'],
+            coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))*units('Pa*meter/second')
+    w_TEM = ds_bar.w + w_upper/a/dphi/cphi
+    if pressure_level == False:
+            w_anom = w_anom*-1*H/(w_anom.pressure*100*units('Pa'))
+
+    #Meridional component
+    v_upper = np.gradient(thtap_vp/dthtadp, axis= 2, edge_order=2)
+    v_upper= xr.DataArray(v_upper, dims = ['time', 'pressure', 'lat'],
+            coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))*units('Pa*meter/second')
+    v_TEM = ds_bar.v + v_upper/dp
+    
+    w_TEM.name = 'w_star'
+    v_TEM.name = 'v_star'
+    return xr.merge([v_TEM, w_TEM])
+        
+def EOF(data, normalize=True):
     '''
     Function for performing EOF analysis
     Parameters: 
