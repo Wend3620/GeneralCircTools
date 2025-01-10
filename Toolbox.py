@@ -46,7 +46,7 @@ def EPflux(dataset, divergence = True, QG = False):
                 dataset=dataset.rename({i: "pressure"})
         elif test_string in 'uwindzonalwind':
             dim_ready+=1
-            if i != 'v':
+            if i != 'u':
                 dataset=dataset.rename({i: "u"})
         elif test_string in 'vwindmeridionalwind' :
             dim_ready+=1
@@ -172,7 +172,7 @@ def EPflux_np(dataset, divergence = True, QG = False):
                 dataset=dataset.rename({i: "pressure"})
         elif test_string in 'uwindzonalwind':
             dim_ready+=1
-            if i != 'v':
+            if i != 'u':
                 dataset=dataset.rename({i: "u"})
         elif test_string in 'vwindmeridionalwind' :
             dim_ready+=1
@@ -298,7 +298,7 @@ def EPflux_np(dataset, divergence = True, QG = False):
         print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
     
-def TEM(dataset, pressure_level = False):
+def TEM_vectors(dataset, pressure_level = False):
     r'''
     (Using numpy to calculate derivatives)
     Function used for calculating Transformed Eulerian Means(TEM) Circulation vectors.
@@ -335,10 +335,6 @@ def TEM(dataset, pressure_level = False):
             dim_ready+=1
             if i != 'pressure':
                 dataset=dataset.rename({i: "pressure"})
-        elif test_string in 'uwindzonalwind':
-            dim_ready+=1
-            if i != 'v':
-                dataset=dataset.rename({i: "u"})
         elif test_string in 'vwindmeridionalwind' :
             dim_ready+=1
             if i != 'v':
@@ -360,7 +356,7 @@ def TEM(dataset, pressure_level = False):
     if thta == False:
         dataset['thta']=mpcalc.potential_temperature(dataset.pressure, dataset.t).transpose('time', 'pressure', 'lat', 'lon')
 
-    if dim_ready != 6:
+    if dim_ready != 5:
         raise KeyError("You are missing one of the dimensions required for the calculation")
     
     #Calculation for mean values
