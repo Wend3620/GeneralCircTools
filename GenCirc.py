@@ -289,7 +289,6 @@ def EPflux_np(dataset, divergence = True, QG = False):
         dFz = dfz/rho/dz*units('kg/m^3')
         dFz = 86400*dFz.mean('lon')*units('m^2/s/day') #* units('joule/kg*s/day')
 
-        
         dFy.name = 'dFy'
         dFz.name = 'dFz'
         print(str((dataset['time'].values)[1]) + ': done')
@@ -297,7 +296,101 @@ def EPflux_np(dataset, divergence = True, QG = False):
     else: 
         print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
+
+# def EVector(dataset, divergence = True, QG = False):
+
+#     r'''
+#     (Using numpy to calculate derivatives)
+#     Function used for calculating Eliassen Palm flux (EP flux) vectors.
     
+#     Variable required: Zonal wind(u), Meridional wind(v), Temperature(t), Vertical wind(w)(Ignored if you want QG results only(QG==True)).
+    
+#     Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    
+#     Parameters
+#     ----------
+#     dataset: 'xarray.Dataset' 
+#         The dataset for EP flux calculation.
+#     divergence: 'bool'
+#         Whether to calculate EP flux divergence or not. Default is True
+#     QG: 'bool'
+#         Use QG version equation for calculation if True, not if False
+    
+#     Returns
+#     -------
+#     'xarray.Dataset'
+#         A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
+#     '''
+    
+#     QG = False
+#     T0= dataset.t.sel(pressure = 1000)#K
+#     R0 = 287 * units('m^2/s^2/kelvin') #J/kg/K
+#     P0= 101300 *units('Pa')#hPa
+#     # a = 6378000 * units.meter #m radius of the earth
+#     rho0 = P0/T0/R0 #kg/m3
+#     cphi = np.cos(dataset.lat*np.pi/180)
+#     rho = rho0*(dataset.pressure*100*units.Pa)/P0
+#     rho.attrs["long_name"] = "density"
+#     rho.attrs["units"] = "kg/m3"
+#     rho.attrs["standard_name"] = "air_density"
+#     rho = rho*units("kg/Pa/s^2/m")
+#     #Zonal mean
+#     ds_bar = dataset.mean('lon')
+#     #Eddies
+#     up = dataset.u - ds_bar.u
+#     vp = dataset.v - ds_bar.v
+#     up_vp = up*vp
+    
+#     thtap_vp = (dataset.v - ds_bar.v)*(dataset.thta - ds_bar.thta)
+#     #Derivatives
+#     dp = np.gradient(ds_bar.pressure, edge_order=2)
+#     dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
+
+#     dphi = np.gradient(dataset.lat, edge_order=2)
+
+#     dphi = dphi*np.pi/-180
+#     dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
+    
+#     dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
+#                     coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
+
+#     dthtadp = dthta/dp * units('kelvin')
+#     #Putting everything together...
+#     fx = 0.5*((vp**2).mean('time') - (up**2).mean('time'))
+#     Fx = rho*cphi*fx #*a
+    
+#     if QG != True:
+#         dudp = np.gradient(dataset.u, axis = 1, edge_order=2)
+#         #print(dudp.shape)
+#         dudp = xr.DataArray(dudp*-1, dims = ['time', 'pressure','lat', 'lon'],
+#                             coords=dict(pressure = dataset.pressure, lat= dataset.lat, time = dataset.time))*units('m/s')
+#         dudp = (dudp/dp)
+#         Ep1ag = dudp*thtap_vp/dthtadp
+#         fy = -1*up_vp + Ep1ag
+#     else:
+#         fy = -1*up_vp
+
+#     Fy = rho*cphi*fy.mean('time') #*a
+
+#     Fx.name = 'Fx'
+#     Fy.name = 'Fy'
+    
+#     if divergence == True:
+#         dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
+#         dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
+#                             coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
+#         dfy = dfy/dphi*cphi - 2*sphi*cphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
+#         dFy = dfy/rho/a/cphi*units('kg/m^3')
+#         dFy = 86400*dFy.mean('lon')*units('m^2/s/day')
+
+#         dFy.name = 'dFy'
+        
+#         print(str((dataset['time'].values)[1]) + ': done')
+#         return xr.merge([Fx, Fy, dFx, dFy])
+#     else: 
+#         print(str((dataset['time'].values)[1]) + ': done')
+#         return xr.merge([Fx, Fy])
+
 def TEM_vectors(dataset, pressure_level = False):
     r'''
     (Using numpy to calculate derivatives)
@@ -400,6 +493,8 @@ def TEM_vectors(dataset, pressure_level = False):
     w_TEM.name = 'w_star'
     v_TEM.name = 'v_star'
     return xr.merge([v_TEM, w_TEM])
+
+
         
 def EOF(data, normalize=True):
     '''
