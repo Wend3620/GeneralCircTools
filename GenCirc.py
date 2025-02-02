@@ -297,7 +297,7 @@ def EPflux_np(dataset, divergence = True, QG = False):
         print(str((dataset['time'].values)[1]) + ': done')
         return xr.merge([Fy, Fz])
 
-# def EVector(dataset, divergence = True, QG = False):
+def EVector(dataset, divergence = True, QG = False):
 
 #     r'''
 #     (Using numpy to calculate derivatives)
@@ -322,74 +322,69 @@ def EPflux_np(dataset, divergence = True, QG = False):
 #         A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
 #     '''
     
-#     QG = False
-#     T0= dataset.t.sel(pressure = 1000)#K
-#     R0 = 287 * units('m^2/s^2/kelvin') #J/kg/K
-#     P0= 101300 *units('Pa')#hPa
-#     # a = 6378000 * units.meter #m radius of the earth
-#     rho0 = P0/T0/R0 #kg/m3
-#     cphi = np.cos(dataset.lat*np.pi/180)
-#     rho = rho0*(dataset.pressure*100*units.Pa)/P0
-#     rho.attrs["long_name"] = "density"
-#     rho.attrs["units"] = "kg/m3"
-#     rho.attrs["standard_name"] = "air_density"
-#     rho = rho*units("kg/Pa/s^2/m")
-#     #Zonal mean
-#     ds_bar = dataset.mean('lon')
-#     #Eddies
-#     up = dataset.u - ds_bar.u
-#     vp = dataset.v - ds_bar.v
-#     up_vp = up*vp
-    
-#     thtap_vp = (dataset.v - ds_bar.v)*(dataset.thta - ds_bar.thta)
-#     #Derivatives
-#     dp = np.gradient(ds_bar.pressure, edge_order=2)
-#     dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
+    T0= dataset.t.sel(pressure = 1000)#K
+    R0 = 287 * units('m^2/s^2/kelvin') #J/kg/K
+    P0= 101300 *units('Pa')#hPa
+    rho0 = P0/T0/R0 #kg/m3
+    cphi = np.cos(dataset.lat*np.pi/180)
+    rho = rho0*(dataset.pressure*100*units.Pa)/P0
+    rho.attrs["long_name"] = "density"
+    rho.attrs["units"] = "kg/m3"
+    rho.attrs["standard_name"] = "air_density"
+    rho = rho.mean('time')*units("kg/Pa/s^2/m")
+    #Zonal mean
+    ds_bar = dataset.mean('time')
+    #Eddies
+    up = dataset.u - ds_bar.u
+    vp = dataset.v - ds_bar.v
+    up_vp = (up*vp).mean('time')
 
-#     dphi = np.gradient(dataset.lat, edge_order=2)
+    #Derivatives
+    dp = np.gradient(ds_bar.pressure, edge_order=2)
+    dp = (xr.DataArray(dp, dims = ['pressure'], coords=dict(pressure = dataset.pressure), name='pressure')*-100)*units('Pa')
 
-#     dphi = dphi*np.pi/-180
-#     dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
-    
-#     dthta = xr.DataArray(dthta*-1, dims = ['time', 'pressure', 'lat'],
-#                     coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))
+    dthta = np.gradient(ds_bar.thta, axis=1, edge_order=2)
 
-#     dthtadp = dthta/dp * units('kelvin')
-#     #Putting everything together...
-#     fx = 0.5*((vp**2).mean('time') - (up**2).mean('time'))
-#     Fx = rho*cphi*fx #*a
-    
-#     if QG != True:
-#         dudp = np.gradient(dataset.u, axis = 1, edge_order=2)
-#         #print(dudp.shape)
-#         dudp = xr.DataArray(dudp*-1, dims = ['time', 'pressure','lat', 'lon'],
-#                             coords=dict(pressure = dataset.pressure, lat= dataset.lat, time = dataset.time))*units('m/s')
-#         dudp = (dudp/dp)
-#         Ep1ag = dudp*thtap_vp/dthtadp
-#         fy = -1*up_vp + Ep1ag
-#     else:
-#         fy = -1*up_vp
+    dthta = xr.DataArray(dthta*-1, dims = ['pressure', 'lat','lon'],
+                        coords=dict(pressure = dataset.pressure, lon = dataset.lon, lat= dataset.lat))
 
-#     Fy = rho*cphi*fy.mean('time') #*a
+    dphi = np.gradient(dataset.lat, edge_order=2)
 
-#     Fx.name = 'Fx'
-#     Fy.name = 'Fy'
-    
-#     if divergence == True:
-#         dfy = np.gradient(fy * rho.mean('lon') , axis = 2, edge_order=2)
-#         dfy = xr.DataArray(-1*dfy, dims = ['time', 'pressure','lat'],
-#                             coords=dict(pressure = dataset.pressure, lat=dataset.lat, time = dataset.time))
-#         dfy = dfy/dphi*cphi - 2*sphi*cphi*fy * rho * units ('s^2*m/kg') #* units('s^2/m^2')
-#         dFy = dfy/rho/a/cphi*units('kg/m^3')
-#         dFy = 86400*dFy.mean('lon')*units('m^2/s/day')
+    dphi = dphi*np.pi/-180
+    dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
 
-#         dFy.name = 'dFy'
-        
-#         print(str((dataset['time'].values)[1]) + ': done')
-#         return xr.merge([Fx, Fy, dFx, dFy])
-#     else: 
-#         print(str((dataset['time'].values)[1]) + ': done')
-#         return xr.merge([Fx, Fy])
+    fx = 0.5*((vp**2).mean('time') - (up**2).mean('time'))
+    # fx = 0.5*((vp**2) - (up**2))
+    Fx = (rho*cphi*fx)
+
+    #Putting everything together...
+    fy = -1*up_vp
+
+    Fy = (rho*cphi*fy)
+
+    Fx.name = 'Fx'
+    Fy.name = 'Fy'
+    # xr.merge([Fx, Fy])
+    dfx = np.gradient(fx * rho , axis = 2, edge_order=2)
+    dfx = xr.DataArray(dfx, dims = ['pressure', 'lat','lon'],
+                        coords=dict(pressure=dataset.pressure, on = dataset.lon, lat= dataset.lat))
+    dx = np.gradient(ds_bar.lon, axis=0, edge_order=2)
+    dx = np.outer(cphi.values, dx)
+    dx = xr.DataArray(dx, dims = ['lat','lon'],
+                        coords=dict(lon = dataset.lon, lat= dataset.lat))
+    dFx = dfx/dx/rho
+
+    dfy = np.gradient(fy *cphi* rho , axis = 1, edge_order=2)
+    dfy = xr.DataArray(-1*dfy, dims = [ 'pressure', 'lat', 'lon'], 
+                        coords=dict(pressure = dataset.pressure, lon=dataset.lon, lat=dataset.lat))
+    dfy = dfy/dphi
+    dFy = dfy/rho/cphi
+
+    dFx.name = 'dFx'
+    dFy.name = 'dFy'
+
+    # print(str((dataset['time'].values)[1]) + ': done')
+    return xr.merge([Fx, Fy, dFx, dFy])
 
 def TEM_vectors(dataset, pressure_level = False):
     r'''
@@ -485,7 +480,7 @@ def TEM_vectors(dataset, pressure_level = False):
             w_anom = w_anom*-1*H/(w_anom.pressure*100*units('Pa'))
 
     #Meridional component
-    v_upper = np.gradient(thtap_vp/dthtadp, axis= 2, edge_order=2)
+    v_upper = np.gradient(thtap_vp/dthtadp, axis= 1, edge_order=2)
     v_upper= xr.DataArray(v_upper, dims = ['time', 'pressure', 'lat'],
             coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))*units('Pa*meter/second')
     v_TEM = ds_bar.v + v_upper/dp
