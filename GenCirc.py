@@ -3,6 +3,28 @@ import metpy.calc as mpcalc
 from metpy.units import units
 
 def EPflux(dataset, divergence = True, QG = False):
+    r'''
+    (Using xarray to calculate derivatives)
+    Function used for calculating Eliassen Palm flux (EP flux) vectors.
+    
+    Variable required: Zonal wind(u), Meridional wind(v), Temperature(t) or Potnetial Temperature(theta).
+    
+    Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    
+    Parameters
+    ----------
+    dataset: 'xarray.Dataset' 
+        The dataset for EP flux calculation.
+    divergence: 'bool'
+        Whether to calculate EP flux divergence or not. Default is True
+    QG: 'bool'
+        Use QG version equation for calculation if True, not if False
+    
+    Returns
+    -------
+    'xarray.Dataset'
+        A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
+    '''
     thta = False
     dim_ready = 0
     for i in list(dataset.variables):
@@ -114,7 +136,7 @@ def EPflux(dataset, divergence = True, QG = False):
         #     print(str((dataset['time'].values)) + ': done')
         return xr.merge([Fy, Fz]).mean(['lon'])
 
-def EPflux_np(dataset, divergence = True, QG = False, lon = None):
+def EPflux_np(dataset, divergence = True, QG = False):
     r'''
     Parameters
     ----------
@@ -126,9 +148,6 @@ def EPflux_np(dataset, divergence = True, QG = False, lon = None):
 
     QG: 'bool'
         Use QG version equation for calculation if True, not if False
-
-    lon: 'List'
-        Restrict an area of interest by [start, end]
     
     Returns
     -------
@@ -182,17 +201,6 @@ def EPflux_np(dataset, divergence = True, QG = False, lon = None):
 
     #Zonal mean
     ds_bar = dataset.mean('lon')
-
-    if lon == None:
-        pass
-    elif lon[0]>0 and lon[1]<0:
-        temp1 = dataset.sel(lon = slice(lon[0], 180))
-        temp2 = dataset.sel(lon = slice(-180, lon[1]))
-        dataset = xr.concat([temp1, temp2], dim = 'lon')
-    elif lon[0] < lon[1]:
-        dataset = dataset.sel(lon = slice(lon[0], lon[1]))
-    else: 
-        raise RuntimeError("What are you putting in ???")
 
     #Constants
     T0= dataset.t.sel(pressure = 1000)#K
@@ -303,28 +311,26 @@ def EPflux_np(dataset, divergence = True, QG = False, lon = None):
 
 def E_Vectors(dataset, divergence = True):
 
-#     r'''
-#     (Using numpy to calculate derivatives)
-#     Function used for calculating Eliassen Palm flux (EP flux) vectors.
+    r'''
+    (Using numpy to calculate derivatives)
+    Function used for calculating Eliassen Palm flux (EP flux) vectors.
     
-#     Variable required: Zonal wind(u), Meridional wind(v), Temperature(t) or Potnetial Temperature(theta).
+    Variable required: Zonal wind(u), Meridional wind(v), Temperature(t) or Potnetial Temperature(theta).
     
-#     Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
+    Dimension required: Pressure (p), Latitude(lat), Longitude(lon).
     
-#     Parameters
-#     ----------
-#     dataset: 'xarray.Dataset' 
-#         The dataset for EP flux calculation.
-#     divergence: 'bool'
-#         Whether to calculate EP flux divergence or not. Default is True
-#     QG: 'bool'
-#         Use QG version equation for calculation if True, not if False
+    Parameters
+    ----------
+    dataset: 'xarray.Dataset' 
+        The dataset for EP flux calculation.
+    divergence: 'bool'
+        Whether to calculate EP flux divergence or not. Default is True
     
-#     Returns
-#     -------
-#     'xarray.Dataset'
-#         A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
-#     '''
+    Returns
+    -------
+    'xarray.Dataset'
+        A dataset contains calculated data in 3 dimensions (Latitude, Pressure, Time).
+    '''
     thta = False
     dim_ready = 0
     for i in list(dataset.variables):
