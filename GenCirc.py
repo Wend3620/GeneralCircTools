@@ -301,7 +301,7 @@ def EPflux_np(dataset, divergence = True, QG = False, lon = None):
     #         print(str((dataset['time'].values)) + ': done')
         return xr.merge([Fy, Fz])
 
-def EVector(dataset, divergence = True):
+def E_Vectors(dataset, divergence = True):
 
 #     r'''
 #     (Using numpy to calculate derivatives)
