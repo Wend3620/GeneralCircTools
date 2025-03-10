@@ -472,10 +472,10 @@ def TEM_vectors(dataset, pressure_level = False):
     dphi = xr.DataArray(dphi, dims = ['lat'], coords=dict(lat = dataset.lat), name='dphi')
 
     #Vertical component
-    w_upper = np.gradient(thtap_vp/dthtadp*cphi, axis= 2, edge_order=2)*np.pi/-180
+    w_upper = np.gradient(thtap_vp/dthtadp*cphi, axis= 2, edge_order=2)
     w_upper= xr.DataArray(w_upper, dims = ['time', 'pressure', 'lat'],
             coords=dict(pressure = dataset.pressure, time = dataset.time, lat= dataset.lat))*units('Pa*meter/second')
-    w_TEM = ds_bar.w + w_upper/a/dphi/cphi
+    w_TEM = ds_bar.w - w_upper/a/dphi/cphi
     if pressure_level == False:
             w_anom = w_anom*-1*H/(w_anom.pressure*100*units('Pa'))
 
@@ -491,33 +491,40 @@ def TEM_vectors(dataset, pressure_level = False):
 
 
         
-def EOF(data, normalize=True):
+def EOF(data, norm_start=True,norm_end=True):
     '''
     Function for performing EOF analysis
     Parameters: 
     data: array-like
         Your input data
-    normalize: Boolean
+    norm_start: Boolean
         True if input data is expected to be normalized before the analysis.
+    norm_end: Boolean
+        True if principal components expected to be normalized before the analysis.
     Returns:
     pc: array-like
         Resulted principal components
     angles: array-like
         Phase angle calculated by arctan(pc2/pc1) (Second component/First component)
     '''
-    if normalize==True:
+    if norm_start==True:
         raw_data = data #.sel(isobaricInhPa=50)
         X_mean = raw_data.mean()
         X_std = raw_data.std()
         data = (raw_data - X_mean) / X_std
-    ucov = np.cov(data.T)
-    eval, evec = np.linalg.eig(ucov)
-    idxes = np.argsort(eval)[::-1]
-    eval = eval[idxes]
-    evec = evec[:, idxes]
+    # ucov = np.cov(data.T)/np.size(data,axis = 0) 
+    # eval, evec = np.linalg.eig(ucov)
+    # idxes = np.argsort(eval)[::-1]
+    # eval = eval[idxes]
+    # evec = evec[:, idxes]
+    u,s,v=np.linalg.svd(data.T, full_matrices=False)
 
-    pc = np.dot(data, evec) #Principal component
-    
+    # z1= np.dot(u,s)
+    # z1 = (z1-np.mean(z1))/np.std(z1)  
+
+    pc = np.dot(data, v) #Principal component
+    if norm_end == True:
+        pc = (pc-np.mean(pc))/np.std(pc)  
     thta = np.arctan2(pc[:, 1], pc[:, 0])
     vals = np.degrees(thta)
     angles = np.array([float(i) if i>0 else float(i)+360 for i in vals])
