@@ -313,7 +313,7 @@ def E_Vectors(dataset, divergence = True):
 
     r'''
     (Using numpy to calculate derivatives)
-    Function used for calculating Eliassen Palm flux (EP flux) vectors.
+    Function used for calculating Extended Eliassen Palm flux (E Vectors).
     
     Variable required: Zonal wind(u), Meridional wind(v), Temperature(t) or Potnetial Temperature(theta).
     
